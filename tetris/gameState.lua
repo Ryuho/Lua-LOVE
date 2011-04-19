@@ -1,4 +1,3 @@
-
 --constants
 local unit = 24
 local xDim = 11
@@ -13,13 +12,14 @@ tetrisGameState = Gamestate.new()
 local score = 0
 local lines = 0
 local playTime = 0
-local nextBlock = -1
-local swapBlock = -1
 
 blocks = {}
 
-local current
-local currBlocks
+local currentTBlock
+local swapTBlock
+local nextTBlock
+
+local occupiedGrid
 
 -- Initialize the pseudo random number generator
 math.randomseed(os.time())
@@ -129,6 +129,31 @@ end
 
 function tetrisGameState:draw()
    -- draw the tetris grid
+   drawTetrisGrid()   
+      
+   --draw the boxes
+   drawTBlocks()
+   
+   --draw the current block   
+   drawCurrentTBlock()
+   
+   --print the score, lines, time, next and swap
+   love.graphics.setFont(ASSETS.smallFont)
+   
+   local tempString = string.format("Score: \n %d", score)
+   love.graphics.setColor(255, 5, 5)
+   love.graphics.print(tempString, 10, 10)
+   
+   tempString = string.format("Lines: \n %d", lines)
+   love.graphics.setColor(255, 5, 5)
+   love.graphics.print(tempString, 10, 70)
+   
+   tempString = string.format("Time: \n %4.2fs", playTime)
+   love.graphics.setColor(255, 5, 5)
+   love.graphics.print(tempString, 10, 130)
+end
+
+function drawTetrisGrid()
    love.graphics.setColor(0, 255, 255, 255)
    love.graphics.setLineWidth( 1 )
    local initX = 280
@@ -149,8 +174,9 @@ function tetrisGameState:draw()
                            endX , initY + i*unit)
       i = i + 1
    end
-   
-   --draw the boxes
+end
+
+function drawTBlocks()
    love.graphics.setColor(255, 255, 255, 255)
    local i = 1
    local j = 1
@@ -162,28 +188,15 @@ function tetrisGameState:draw()
       j = 1
       i = i + 1
    end
-   
-   --draw the current block
-   for count = 1, #currBlocks do
-      local tempX = currBlocks[count][1]
-      local tempY = currBlocks[count][2]
-      drawBlock(tempX,tempY,current[2])
+end
+
+function drawCurrentTBlock()
+   --draw the currentTBlock block
+   for count = 1, #occupiedGrid do
+      local tempX = occupiedGrid[count][1]
+      local tempY = occupiedGrid[count][2]
+      drawBlock(tempX,tempY,currentTBlock[2])
    end
-   
-   --print the score, lines, time, next and swap
-   love.graphics.setFont(ASSETS.smallFont)
-   
-   local tempString = string.format("Score: \n %d", score)
-   love.graphics.setColor(255, 5, 5)
-   love.graphics.print(tempString, 10, 10)
-   
-   tempString = string.format("Lines: \n %d", lines)
-   love.graphics.setColor(255, 5, 5)
-   love.graphics.print(tempString, 10, 70)
-   
-   tempString = string.format("Time: \n %4.2fs", playTime)
-   love.graphics.setColor(255, 5, 5)
-   love.graphics.print(tempString, 10, 130)
 end
 
 function tetrisGameState:keyreleased(key, unicode)
@@ -194,9 +207,77 @@ function tetrisGameState:keyreleased(key, unicode)
    end
 end
 
+function rotateTBlock()
+   local blockType = currentTBlock[1]
+
+   local originX = currentTBlock[4]
+   local originY = currentTBlock[5]
+
+   local shouldRotate = true
+
+   local currRotate = currentTBlock[3] + 1
+   --print("currRotate=" .. currRotate)
+   local maxRotate = blockTable[blockType][1]
+   --print("maxRotate=" .. maxRotate)
+   
+   local calculatedRotation = currRotate % maxRotate
+   --print("calculatedRotation=" .. calculatedRotation)
+   
+   if calculatedRotation == 0 then
+      for count = 2, #blockTable[blockType] do
+         local tempX = blockTable[blockType][count][1]
+         local tempY = blockTable[blockType][count][2]
+         if originX+tempX <= 0 or 
+            originX+tempX >= xDim or
+            originY+tempY <= 0 or
+            originY+tempY >= yDim then
+            shouldRotate = false
+         end
+      end
+   elseif calculatedRotation == 1 then
+      for count = 2, #blockTable[blockType] do
+         local tempX = blockTable[blockType][count][2]
+         local tempY = blockTable[blockType][count][1]
+         if originX-tempX <= 0 or 
+            originX-tempX >= xDim or
+            originY+tempY <= 0 or
+            originY+tempY >= yDim then
+            shouldRotate = false
+         end
+      end
+   elseif calculatedRotation == 2 then
+      for count = 2, #blockTable[blockType] do
+         local tempX = blockTable[blockType][count][1]
+         local tempY = blockTable[blockType][count][2]
+         if originX-tempX <= 0 or 
+            originX-tempX >= xDim or
+            originY-tempY <= 0 or
+            originY-tempY >= yDim then
+            shouldRotate = false
+         end
+      end
+   elseif calculatedRotation == 3 then
+      for count = 2, #blockTable[blockType] do
+         local tempX = blockTable[blockType][count][2]
+         local tempY = blockTable[blockType][count][1]
+         if originX+tempX <= 0 or 
+            originX+tempX >= xDim or
+            originY-tempY <= 0 or
+            originY-tempY >= yDim then
+            shouldRotate = false
+         end
+      end
+   end
+   
+   if shouldRotate then
+      currentTBlock[3] = currentTBlock[3] + 1
+   end
+
+end
+
 function tetrisGameState:keypressed(key, unicode)
    if key == 'w' or key == 'up' then
-      current[3] = current[3] + 1
+      rotateTBlock()
    end
    if key == 'a' or key == 'left' then
       if canMove(-1,0) then
@@ -221,33 +302,46 @@ function tetrisGameState:keypressed(key, unicode)
       placeBlocks()
       newCurrBlock()
    end
-   checkLineClear()
+   if key == 'z' then
+      if swapTBlock == nil then
+         swapTBlock = currentTBlock
+         newCurrBlock()
+      else
+         local tempTBlock = currentTBlock
+         currentTBlock = swapTBlock
+         swapTBlock = tempTBlock
+      end
+   end
+
    setBlocks()
-   tetrisGameState:draw()
+   checkLineClear()
+   drawTBlocks()
+   drawCurrentTBlock()
    
 end
 
 local fallTemp = 0
 
 function tetrisGameState:update(dt)
+   --increment the total play time
+   playTime = playTime + dt
+
    --calculate the fall delay
    fallTemp = fallTemp + dt
    
    --if it's time to fall...
    if fallTemp > fallDelay then
-      --try to move, 
+      --move one space down, if it can't...
       if not move(0,1) then
+         --place the currentTBlock onto the grid
          placeBlocks()
+         --get new blocks
          newCurrBlock()
+         --check to see if any lines need to be cleared
          checkLineClear()
-         --if you can't move in this position, that means you are filled to the top, game over!~~
-         if not canMove(0,0) then
-            Gamestate.switch(gameOverState)
-         end
       end
       fallTemp = 0
    end
-   playTime = playTime + dt
 end
 
 function gameOverState:keyreleased(key)
@@ -257,8 +351,8 @@ function gameOverState:keyreleased(key)
 end
 
 function gameOverState:draw()
-   love.graphics.setColor(224, 27, 99, 200)
-   love.graphics.rectangle('fill', 50, 50, SCREEN_WIDTH-100, SCREEN_HEIGHT-100)
+   --love.graphics.setColor(224, 27, 99, 200)
+   --love.graphics.rectangle('fill', 50, 50, SCREEN_WIDTH-100, SCREEN_HEIGHT-100)
 
    local gameOverString = string.format("Game Over!\nYour score was %0.2f\n\nPress 'h' for high scores.", score)
    love.graphics.setFont(ASSETS.largeFont)
@@ -412,13 +506,13 @@ end
 
 -- checks to see if the move is legal, returns true if doable, false if not
 function canMove(x,y)
-   local blockType = current[1]
+   local blockType = currentTBlock[1]
    
    local move = true
    
-   for count = 1, #currBlocks do
-      local tempX = currBlocks[count][1]
-      local tempY = currBlocks[count][2]
+   for count = 1, #occupiedGrid do
+      local tempX = occupiedGrid[count][1]
+      local tempY = occupiedGrid[count][2]
       if tempX+x <= 0 or 
             tempX+x >= xDim or 
             tempY+y <= 0 or 
@@ -432,15 +526,15 @@ function canMove(x,y)
    return move
 end
 
--- moves the current block to the specified corrdinates,
+-- moves the currentTBlock block to the specified corrdinates,
 -- returns true if it succeeded, false if it failed
 function move(x,y)
-   local blockType = current[1]
+   local blockType = currentTBlock[1]
    
    if canMove(x,y) then
-      current[4] = current[4] + x
-      current[5] = current[5] + y
-      setBlocks() --update the currBlocks
+      currentTBlock[4] = currentTBlock[4] + x
+      currentTBlock[5] = currentTBlock[5] + y
+      setBlocks() --update the occupiedGrid
       return true
    else
       return false
@@ -453,91 +547,98 @@ function newGame()
    score = 0
    lines = 0
    playTime = 0
-   nextBlock = -1
-   swapBlock = -1
+
+   swapTBlock = nil
+   nextTBlock = {math.random(1,#blockTable), math.random(1,#colorTable), 0, 6, 1}
+
    inGame = true
    resetBlock()
    newCurrBlock()
    Gamestate.switch(tetrisGameState)
 end
 
--- Checks to see if it can go down more, then places the current block onto the grid
+-- Checks to see if it can go down more, then places the currentTBlock block onto the grid
 function placeBlocks()
    --error check, should not be called if it can go down more
    if canMove(0,1) then
       print("Called placeBlocks while canMove(0,1) is true")
       love.quit()
    end
-   
 
-   
-   for count = 1, #currBlocks do
-      local tempX = currBlocks[count][1]
-      local tempY = currBlocks[count][2]
-      blocks[tempX][tempY] = current[2]
+   for count = 1, #occupiedGrid do
+      local tempX = occupiedGrid[count][1]
+      local tempY = occupiedGrid[count][2]
+      blocks[tempX][tempY] = currentTBlock[2]
    end
 
    
 end
 
--- looks at the current value and fills out the currBlocks which 
--- is a pair of x,y coord which indicate which blocks are occupied by the current block
+-- looks at the currentTBlock value and fills out the occupiedGrid which 
+-- is a pair of x,y coord which indicate which blocks are occupied by the currentTBlock block
 function setBlocks()
    --actually populate it
-   currBlocks = {}
-   local blockType = current[1]
-   local originX = current[4]
-   local originY = current[5]
+   occupiedGrid = {}
+   local blockType = currentTBlock[1]
+   local originX = currentTBlock[4]
+   local originY = currentTBlock[5]
    
-   local blockType = current[1]
-   print("blockType=" .. blockType)
+   local blockType = currentTBlock[1]
+   --print("blockType=" .. blockType)
    
    local tempString = ""
    for count = 2, #blockTable[blockType] do
       tempString = tempString .. "(" .. blockTable[blockType][count][1] .. "," .. blockTable[blockType][count][2] .. ") "
    end
-   print(tempString)
+   --print(tempString)
    
-   local currRotate = current[3]
-   print("currRotate=" .. currRotate)
+   local currRotate = currentTBlock[3]
+   --print("currRotate=" .. currRotate)
    local maxRotate = blockTable[blockType][1]
-   print("maxRotate=" .. maxRotate)
+   --print("maxRotate=" .. maxRotate)
    
    local calculatedRotation = currRotate % maxRotate
-   print("calculatedRotation=" .. calculatedRotation)
+   --print("calculatedRotation=" .. calculatedRotation)
    
    if calculatedRotation == 0 then
       for count = 2, #blockTable[blockType] do
          local tempX = blockTable[blockType][count][1]
          local tempY = blockTable[blockType][count][2]
-         currBlocks[count-1] = {originX+tempX, originY+tempY}
+         occupiedGrid[count-1] = {originX+tempX, originY+tempY}
       end
    elseif calculatedRotation == 1 then
       for count = 2, #blockTable[blockType] do
          local tempX = blockTable[blockType][count][2]
          local tempY = blockTable[blockType][count][1]
-         currBlocks[count-1] = {originX-tempX, originY+tempY}
+         occupiedGrid[count-1] = {originX-tempX, originY+tempY}
       end
    elseif calculatedRotation == 2 then
       for count = 2, #blockTable[blockType] do
          local tempX = blockTable[blockType][count][1]
          local tempY = blockTable[blockType][count][2]
-         currBlocks[count-1] = {originX-tempX, originY-tempY}
+         occupiedGrid[count-1] = {originX-tempX, originY-tempY}
       end
    elseif calculatedRotation == 3 then
       for count = 2, #blockTable[blockType] do
          local tempX = blockTable[blockType][count][2]
          local tempY = blockTable[blockType][count][1]
-         currBlocks[count-1] = {originX+tempX, originY-tempY}
+         occupiedGrid[count-1] = {originX+tempX, originY-tempY}
       end
    end
 end
 
---produces a new current block, clearing current and currBlocks value
+--produces a new currentTBlock block, clearing currentTBlock and occupiedGrid value
 function newCurrBlock()
+   currentTBlock = nextTBlock
    --         type,                       color,                   rotate, x, y
-   current = {math.random(1,#blockTable), math.random(1,#colorTable), 0, 6, 1}
+   nextTBlock = {math.random(1,#blockTable), math.random(1,#colorTable), 0, 6, 1}
    setBlocks()
+
+   -- if you can't move again with the next TBlock, 
+   -- that means you are filled to the top, game over!~~
+   if not canMove(0,0) then
+      Gamestate.switch(gameOverState)
+   end
 end
 
 --resets the block array to 0 (empty)
@@ -560,20 +661,16 @@ function checkLineClear()
    local clearedLines = 0
    for j = 1, #blocks[1] do
       local shouldClear = true;
-      local stringG = ""
       for i = 1, #blocks do
-         stringG = stringG .. blocks[i][j] .. " "
          if blocks[i][j] == 0 then
             shouldClear = false
          end
       end
       if shouldClear then
-         print("clearing line #" .. j)
          clearLine(j)
          clearedLines = clearedLines + 1
          love.audio.play(ASSETS.lineClear)
       end
-      --print(j .. "=(" .. stringG .. ")")
    end
    
    score = score + (clearedLines*clearedLines*10)
@@ -584,9 +681,6 @@ end
 function clearLine(lineNumber)
    local currLine = lineNumber
    
-   --for i = 1, #blocks do
-   --   blocks[i][lineNumber] = 0
-   --end
    currLine = currLine - 1
    while currLine >= 1 do
       for i = 1, #blocks do
