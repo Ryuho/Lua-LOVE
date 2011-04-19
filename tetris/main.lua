@@ -32,7 +32,9 @@ function love.load()
    ASSETS.verySmallFont = love.graphics.newFont(15)
    ASSETS.smallFont     = love.graphics.newFont(25)
    ASSETS.largeFont     = love.graphics.newFont(50)
-   ASSETS.bgMusic       = love.audio.newSource("assets/music/teru_-_Goodbye_War_Hello_Peace.mp3")
+   ASSETS.bgMusic       = love.audio.newSource("assets/tetrisRemixDJLX.mp3")
+   ASSETS.lineClear       = love.audio.newSource("assets/lineClear.mp3")
+   
 
    -- Initialize the pseudo random number generator
    math.randomseed(os.time())
@@ -51,7 +53,7 @@ function love.load()
    -- Load the Highscore (Only call once!)
    highscore_filename = "highscores.txt"
    local places = 10
-
+   love.keyboard.setKeyRepeat(5, 100)
    highscore.set(highscore_filename, places, "Anony", 0)
 end
 

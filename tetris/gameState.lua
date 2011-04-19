@@ -3,7 +3,7 @@
 local unit = 24
 local xDim = 11
 local yDim = 21
-
+local fallDelay = 0.75
 
 
 local selected = 1
@@ -231,7 +231,6 @@ local fallTemp = 0
 
 function tetrisGameState:update(dt)
    --calculate the fall delay
-   local fallDelay = 5.0
    fallTemp = fallTemp + dt
    
    --if it's time to fall...
@@ -572,6 +571,7 @@ function checkLineClear()
          print("clearing line #" .. j)
          clearLine(j)
          clearedLines = clearedLines + 1
+         love.audio.play(ASSETS.lineClear)
       end
       --print(j .. "=(" .. stringG .. ")")
    end

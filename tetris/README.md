@@ -1,20 +1,20 @@
 # Tetris
 
-This is a implementation of Tetris.
+This is an implementation of the game Tetris.
+The language used is Lua LOVE so it should run in Windows, OSX and Linux.
 
 ## Author
 
- * [Ryuho Kudo](www.ryuhokudo.com)
+ * [Ryuho Kudo](http://ryuhokudo.com)
 
-## What
+## Why
 
-This project was created so that the author can practice game development. For that reason, the game its self is pretty simple.
+This project was created so that the author can practice game development. 
+For that reason, the game its self is pretty simple.
 
 ## Installation
 
 Haven't thought of this yet.
-
-Then, `make` and you can play our game!
 
 ## LICENSE
 
