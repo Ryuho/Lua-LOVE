@@ -10,21 +10,23 @@ local selected = 1
 
 -- tetrisGameState and it's global variable
 tetrisGameState = Gamestate.new()
+local score = 0
+local lines = 0
+local playTime = 0
+local nextBlock = -1
+local swapBlock = -1
+
 blocks = {}
-score = 0
-lines = 0
-playTime = 0
-nextBlock = -1
-swapBlock = -1
+
+local current
+local currBlocks
 
 -- Initialize the pseudo random number generator
 math.randomseed(os.time())
 -- The description page for Math says the first few values aren't so random. Burn a few.
 math.random(); math.random(); math.random()
 
--- type, color, rotate, x, y
-local current
-local currBlocks
+
 
 -- settingsGameState
 settingsGameState = Gamestate.new()
@@ -39,14 +41,25 @@ menuGameState = Gamestate.new()
 -- gameOverState
 gameOverState = Gamestate.new()
 
-local blockTable = {{1, {0,0},{0,-1},{0,1},{1,-1}},  -- cube
-               {2, {0,0},{0,1},{0,-1},{0,2}},  -- tetirs
-               {4, {0,0},{0,-1},{-1,0},{0,1}},  -- stand
-               {2, {0,0},{-1,0},{0,-1},{-1,-1}},  -- Z
-               {2, {0,0},{1,0},{0,-1},{-1,0}},  -- reverse Z
-               {4, {0,0},{0,1},{0,-1},{1,-1}},  -- L
-               {4, {0,0},{0,1},{0,-1},{-1,-1}}}  -- reverse L
+local blockTable = {{1, {0,0},{1,0},{0,1},{1,1}},  -- cube
+               {2, {0,0},{1,0},{-1,0},{-2,0}},        -- tetirs
+               {4, {0,0},{1,0},{-1,0},{0,1}},       -- stand
+               {2, {0,0},{-1,0},{0,1},{1,1}},        -- Z
+               {2, {0,0},{1,0},{0,1},{-1,1}},        -- reverse Z
+               {4, {0,0},{1,0},{-1,0},{-1,1}},        -- L
+               {4, {0,0},{-1,0},{1,0},{1,1}}}      -- reverse L
+               
+               
+local colorTable = {{255, 0, 0, 255},  -- pure red
+               {0, 255, 0, 255},       -- pure green
+               {0, 0, 255, 255},       -- pure blue
+               {0, 255, 255, 255},     -- cyan
+               {255, 0, 255, 255},     -- purple
+               {255, 255, 0, 255},     -- yellow
+               {255, 165, 0, 255}}     -- orange
 
+
+               
 function menuGameState:draw()
    love.graphics.setColor(255, 255, 255)
    love.graphics.print("Tetris", SCREEN_WIDTH/2 - 90, 100, 0, 1, 1)
@@ -182,6 +195,9 @@ function tetrisGameState:keyreleased(key, unicode)
 end
 
 function tetrisGameState:keypressed(key, unicode)
+   if key == 'w' or key == 'up' then
+      current[3] = current[3] + 1
+   end
    if key == 'a' or key == 'left' then
       if canMove(-1,0) then
          move(-1,0)
@@ -193,22 +209,38 @@ function tetrisGameState:keypressed(key, unicode)
       end
    end
    if key == 's' or key == 'down' then
-      move(0,1)
+      if not move(0,1) then
+         placeBlocks()
+         newCurrBlock()
+      end
    end
+   if key == ' ' then
+      while canMove(0,1) do
+         move(0,1)
+      end
+      placeBlocks()
+      newCurrBlock()
+   end
+   checkLineClear()
+   setBlocks()
+   tetrisGameState:draw()
+   
 end
 
 local fallTemp = 0
 
 function tetrisGameState:update(dt)
    --calculate the fall delay
-   local fallDelay = 0.75
+   local fallDelay = 5.0
    fallTemp = fallTemp + dt
    
    --if it's time to fall...
    if fallTemp > fallDelay then
       --try to move, 
       if not move(0,1) then
+         placeBlocks()
          newCurrBlock()
+         checkLineClear()
          --if you can't move in this position, that means you are filled to the top, game over!~~
          if not canMove(0,0) then
             Gamestate.switch(gameOverState)
@@ -217,25 +249,6 @@ function tetrisGameState:update(dt)
       fallTemp = 0
    end
    playTime = playTime + dt
-   
-   --print("start------------------------------------")
-   --check to see if there are any lines to clear
-   for j = 1, #blocks[1] do
-      local shouldClear = true;
-      local stringG = ""
-      for i = 1, #blocks do
-         stringG = stringG .. blocks[i][j] .. " "
-         if blocks[i][j] == 0 then
-            shouldClear = false
-         end
-      end
-      if shouldClear then
-         print("clearing line #" .. j)
-         clearLine(j)
-      end
-      --print(j .. "=(" .. stringG .. ")")
-   end
-   --print("end------------------------------------")
 end
 
 function gameOverState:keyreleased(key)
@@ -334,6 +347,8 @@ function settingsGameState:keyreleased(key)
 end
 
 -- Helper functions
+
+-- draws the main menu, changes color depending on which item is currently selected
 function drawMenuItems()
    local offset = 0
    local textStartX = 200
@@ -375,23 +390,12 @@ function drawMenuItems()
    end
 end
 
+-- draws a block on screen with x,y and color
 function drawBlock(x,y,color)
-   if color == 0 then
-      love.graphics.setColor(0, 0, 0, 255)
-   elseif color == 1 then
-      love.graphics.setColor(255, 0, 0, 255)
-   elseif color == 2 then
-      love.graphics.setColor(0, 255, 0, 255)
-   elseif color == 3 then
-      love.graphics.setColor(0, 0, 255, 255)
-   elseif color == 4 then
-      love.graphics.setColor(0, 255, 255, 255)
-   elseif color == 5 then
-      love.graphics.setColor(255, 0, 255, 255)
-   elseif color == 6 then
-      love.graphics.setColor(255, 255, 0, 255)
-   elseif color == 7 then
-      love.graphics.setColor(255, 165, 0, 255)
+   if color ~= 0 then
+      love.graphics.setColor(colorTable[color][1], colorTable[color][2], colorTable[color][3], colorTable[color][4])
+   else
+      love.graphics.setColor(0, 0, 0, 0)
    end
    
    --print("filling (%d,%d)",x,y)
@@ -407,6 +411,7 @@ function drawBlock(x,y,color)
    love.graphics.translate(-unit*(x-1),-unit*(y-1))
 end
 
+-- checks to see if the move is legal, returns true if doable, false if not
 function canMove(x,y)
    local blockType = current[1]
    
@@ -428,6 +433,8 @@ function canMove(x,y)
    return move
 end
 
+-- moves the current block to the specified corrdinates,
+-- returns true if it succeeded, false if it failed
 function move(x,y)
    local blockType = current[1]
    
@@ -437,15 +444,11 @@ function move(x,y)
       setBlocks() --update the currBlocks
       return true
    else
-      for count = 1, #currBlocks do
-         local tempX = currBlocks[count][1]
-         local tempY = currBlocks[count][2]
-         blocks[tempX][tempY] = current[2]
-      end
       return false
    end
 end
 
+-- resets everything and gets the game state ready for a new game
 function newGame()
    load_time = love.timer.getTime()
    score = 0
@@ -459,29 +462,86 @@ function newGame()
    Gamestate.switch(tetrisGameState)
 end
 
-function setBlocks()
-   currBlocks = {}
-   local blockType = current[1]
-   local originX = current[4]
-   local originY = current[5]
-   for count = 2, #blockTable[blockType] do
-      local tempX = blockTable[blockType][count][1]
-      local tempY = blockTable[blockType][count][2]
-      currBlocks[count-1] = {originX+tempX, originY+tempY}
+-- Checks to see if it can go down more, then places the current block onto the grid
+function placeBlocks()
+   --error check, should not be called if it can go down more
+   if canMove(0,1) then
+      print("Called placeBlocks while canMove(0,1) is true")
+      love.quit()
    end
+   
+
    
    for count = 1, #currBlocks do
       local tempX = currBlocks[count][1]
       local tempY = currBlocks[count][2]
+      blocks[tempX][tempY] = current[2]
    end
+
    
 end
 
+-- looks at the current value and fills out the currBlocks which 
+-- is a pair of x,y coord which indicate which blocks are occupied by the current block
+function setBlocks()
+   --actually populate it
+   currBlocks = {}
+   local blockType = current[1]
+   local originX = current[4]
+   local originY = current[5]
+   
+   local blockType = current[1]
+   print("blockType=" .. blockType)
+   
+   local tempString = ""
+   for count = 2, #blockTable[blockType] do
+      tempString = tempString .. "(" .. blockTable[blockType][count][1] .. "," .. blockTable[blockType][count][2] .. ") "
+   end
+   print(tempString)
+   
+   local currRotate = current[3]
+   print("currRotate=" .. currRotate)
+   local maxRotate = blockTable[blockType][1]
+   print("maxRotate=" .. maxRotate)
+   
+   local calculatedRotation = currRotate % maxRotate
+   print("calculatedRotation=" .. calculatedRotation)
+   
+   if calculatedRotation == 0 then
+      for count = 2, #blockTable[blockType] do
+         local tempX = blockTable[blockType][count][1]
+         local tempY = blockTable[blockType][count][2]
+         currBlocks[count-1] = {originX+tempX, originY+tempY}
+      end
+   elseif calculatedRotation == 1 then
+      for count = 2, #blockTable[blockType] do
+         local tempX = blockTable[blockType][count][2]
+         local tempY = blockTable[blockType][count][1]
+         currBlocks[count-1] = {originX-tempX, originY+tempY}
+      end
+   elseif calculatedRotation == 2 then
+      for count = 2, #blockTable[blockType] do
+         local tempX = blockTable[blockType][count][1]
+         local tempY = blockTable[blockType][count][2]
+         currBlocks[count-1] = {originX-tempX, originY-tempY}
+      end
+   elseif calculatedRotation == 3 then
+      for count = 2, #blockTable[blockType] do
+         local tempX = blockTable[blockType][count][2]
+         local tempY = blockTable[blockType][count][1]
+         currBlocks[count-1] = {originX+tempX, originY-tempY}
+      end
+   end
+end
+
+--produces a new current block, clearing current and currBlocks value
 function newCurrBlock()
-   current = {math.random(1,7), math.random(1,7), 0, 6, 2}
+   --         type,                       color,                   rotate, x, y
+   current = {math.random(1,#blockTable), math.random(1,#colorTable), 0, 6, 1}
    setBlocks()
 end
 
+--resets the block array to 0 (empty)
 function resetBlock()
    local i = 1
    local j = 1
@@ -496,11 +556,43 @@ function resetBlock()
    end
 end
 
+--checks each row and clears them, then TODO moves the rows down
+function checkLineClear()
+   local clearedLines = 0
+   for j = 1, #blocks[1] do
+      local shouldClear = true;
+      local stringG = ""
+      for i = 1, #blocks do
+         stringG = stringG .. blocks[i][j] .. " "
+         if blocks[i][j] == 0 then
+            shouldClear = false
+         end
+      end
+      if shouldClear then
+         print("clearing line #" .. j)
+         clearLine(j)
+         clearedLines = clearedLines + 1
+      end
+      --print(j .. "=(" .. stringG .. ")")
+   end
+   
+   score = score + (clearedLines*clearedLines*10)
+   lines = lines + clearedLines
+end
+
+--clears the specified line and moves the above row down
 function clearLine(lineNumber)
    local currLine = lineNumber
    
-   for i = 1, #blocks do
-      blocks[i][currLine] = 0
+   --for i = 1, #blocks do
+   --   blocks[i][lineNumber] = 0
+   --end
+   currLine = currLine - 1
+   while currLine >= 1 do
+      for i = 1, #blocks do
+         blocks[i][currLine + 1] = blocks[i][currLine]
+      end
+      currLine = currLine - 1
    end
    
 end
